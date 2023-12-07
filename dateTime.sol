@@ -203,6 +203,7 @@ contract Raffle is VRFConsumerBaseV2 {
     }
 
 
+    //automation 
     function checkRandom() public {
         count = count+1;
         uint month = dateTime.getMonth(block.timestamp);
