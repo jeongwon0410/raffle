@@ -200,3 +200,4 @@ contract Raffle is VRFConsumerBaseV2 {
 
         return win;
     }
+}
