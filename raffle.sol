@@ -3,12 +3,14 @@
 pragma solidity 0.8.22;
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "https://github.com/jeongwon0410/raffle/blob/main/dateTime.sol";
 
 
 contract Raffle is VRFConsumerBaseV2 {
 
     VRFCoordinatorV2Interface COORDINATOR;
 
+    DateTime public dateTime = new DateTime();
     // 체인링크 구독한 id 토큰빠져나가는 어드민 아이디 설정
     uint64 s_subscriptionId;
     // see https://docs.chain.link/docs/vrf-contracts/#configurations
@@ -26,7 +28,6 @@ contract Raffle is VRFConsumerBaseV2 {
     uint256 public latestRandomNum = 1000;
     // 랜던값 요청시 발생하는 이벤트
     event RandomNumberStored(uint256 indexed randomNumber);
-
 
     //참여자 구조체 -> 참여자:설문조사 = 1:1이라고 생각
     struct application {
@@ -202,9 +203,14 @@ contract Raffle is VRFConsumerBaseV2 {
     }
 
 
+    //automation 
     function checkRandom() public {
+        count = count+1;
+        uint month = dateTime.getMonth(block.timestamp);
+        uint day = dateTime.getDay(block.timestamp);
+
         for(uint i=0;i<raffleTime.length;i++){
-            if(block.timestamp == raffleTime[i]){
+            if(month == dateTime.getMonth(raffleTime[i]) && day == dateTime.getDay(raffleTime[i])){
                 random();
             }
         }
