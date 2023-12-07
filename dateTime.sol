@@ -1,216 +1,217 @@
+// SPDX-License-Identifier: GPL-3.0
+
 pragma solidity 0.8.22;
+import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "https://github.com/jeongwon0410/raffle/blob/main/dateTime.sol";
 
-contract DateTime {
-        /*
-         *  Date and Time utilities for ethereum contracts
-         *
-         */
-        struct _DateTime {
-                uint16 year;
-                uint8 month;
-                uint8 day;
-                uint8 hour;
-                uint8 minute;
-                uint8 second;
-                uint8 weekday;
+
+contract Raffle is VRFConsumerBaseV2 {
+
+    VRFCoordinatorV2Interface COORDINATOR;
+
+    DateTime public dateTime = new DateTime();
+    // 체인링크 구독한 id 토큰빠져나가는 어드민 아이디 설정
+    uint64 s_subscriptionId;
+    // see https://docs.chain.link/docs/vrf-contracts/#configurations
+    
+    address vrfCoordinator = 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625;
+    bytes32 s_keyHash =
+        0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c;
+
+    // 랜덤값 얻을때 옵션들
+    uint32 callbackGasLimit = 40000;
+    uint16 requestConfirmations = 3;
+    uint32 numWords = 1;
+
+    // 랜덤값 잘 얻어졌는지 테스트용 변수
+    uint256 public latestRandomNum = 1000;
+    // 랜던값 요청시 발생하는 이벤트
+    event RandomNumberStored(uint256 indexed randomNumber);
+
+    //참여자 구조체 -> 참여자:설문조사 = 1:1이라고 생각
+    struct application {
+        //설문조사 구분 (한명의 참여자는 한개의 서베이만 참여)
+        string surveyId;
+        //참여자구분
+        // string applicationId;
+        //참여자이름
+        // string name;
+
+        string email;
+        //당첨여부
+        uint win;
+    }
+
+    //설문조사 구조체
+    struct survey {
+        string surveyId;
+        uint raffleTime;
+        uint check;
+        string[] applicationList;
+    }
+
+    mapping(string => application) Applications;
+    mapping (string => survey) Surveys;
+    
+    //automate interval 시간
+    uint interval = 1;
+    //참여자 배열
+    string[] applicationArray;
+    //survey 배열
+    string[] surveyArray;
+    
+    //survey raffletime 배열
+    uint[] raffleTime;
+
+
+    //automate test
+    uint public count;
+
+    //당첨자 
+    string [] win;
+
+
+        // 생성자에 돈빠져나갈 아이디 입력해줘야함 현재 4236
+    constructor(uint64 subscriptionId) VRFConsumerBaseV2(vrfCoordinator) {
+        COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinator);
+        s_subscriptionId = subscriptionId;
+    }
+
+    
+    //설문 등록 
+    function setSurvey(string memory _surveyId,uint _raffleTime,uint check) public {
+
+
+        if(keccak256(abi.encodePacked(Surveys[_surveyId].surveyId)) == keccak256(abi.encodePacked(""))){
+            raffleTime.push(_raffleTime);  
+            surveyArray.push(_surveyId);
         }
+        string[] memory init = new string[](0);
+        Surveys[_surveyId] = survey(_surveyId,_raffleTime,check,init);
+        
+    }
 
-        uint constant DAY_IN_SECONDS = 86400;
-        uint constant YEAR_IN_SECONDS = 31536000;
-        uint constant LEAP_YEAR_IN_SECONDS = 31622400;
+    //설문 가져오기 
+    function getSurvey(string memory _surveyId) public view returns (string memory, uint,uint,string[] memory){
+        string memory surveyId = Surveys[_surveyId].surveyId;
+        uint timeStamp = Surveys[_surveyId].raffleTime;
+        uint check = Surveys[_surveyId].check;
+        string[] memory applicationList = Surveys[_surveyId].applicationList;
+        return (surveyId,timeStamp,check,applicationList);
+    }
 
-        uint constant HOUR_IN_SECONDS = 3600;
-        uint constant MINUTE_IN_SECONDS = 60;
+    //전체 설문 가져오기
+    function getAllSurvey() public view returns(string[] memory){
+        return surveyArray;
+    }
 
-        uint16 constant ORIGIN_YEAR = 1970;
 
-        function isLeapYear(uint16 year) public pure returns (bool) {
-                if (year % 4 != 0) {
-                        return false;
+    //설문 삭제
+    function deleteSurvey() public {
+        for(uint i =0;i<surveyArray.length;i++){
+            delete Surveys[surveyArray[i]];
+        }
+        delete raffleTime;
+        delete surveyArray;
+    }
+
+
+    //참여자 등록
+    function addApplication(string memory _surveyId, string memory _email) public {
+        bool flag = false;
+
+      
+        for(uint i=0;i<surveyArray.length;i++){
+            if(keccak256(abi.encodePacked(surveyArray[i])) == keccak256(abi.encodePacked(_surveyId))){
+                if(keccak256(abi.encodePacked(Applications[_email].email)) == keccak256(abi.encodePacked(""))){
+                    Surveys[_surveyId].applicationList.push(_email);
+                    applicationArray.push(_email);
                 }
-                if (year % 100 != 0) {
-                        return true;
-                }
-                if (year % 400 != 0) {
-                        return false;
-                }
-                return true;
+                Applications[_email] = application(_surveyId,_email,0);
+                flag = true;
+            }
         }
 
-        function leapYearsBefore(uint year) public pure returns (uint) {
-                year -= 1;
-                return year / 4 - year / 100 + year / 400;
+        require(flag==true,"add survey");
+        
+    }
+
+
+
+    //참여자 가져오기
+    function getApplication(string memory _email) public view returns(string memory, string memory ,uint ){
+        string memory email = Applications[_email].email;
+        string memory surveyId = Applications[_email].surveyId;
+        uint win = Applications[_email].win;
+        return (surveyId,email,win);
+    }
+
+
+    //전체 참여자 가져오기
+    function getAllAppication() public view returns(string [] memory){
+        return applicationArray;
+    }
+
+    
+
+    //참여자 삭제
+    function deleteApplication() public {
+       
+        for(uint i=0;i<applicationArray.length;i++){
+            delete Applications[applicationArray[i]];
+        }
+        delete applicationArray;
+    }
+
+
+    function random() public {
+        // 체인링크 vrf함수호출 옵션과 함께
+        uint256 requestId = COORDINATOR.requestRandomWords(
+            s_keyHash,
+            s_subscriptionId,
+            requestConfirmations,
+            callbackGasLimit,
+            numWords
+        );
+         // Store the request ID and wait for the callback to store the result
+        emit RandomNumberStored(requestId);
+    }
+    // 체인링크 vrf함수 호출 이후 랜덤값을 받아 동작할 함수
+    function fulfillRandomWords(
+        uint256 requestId,
+        uint256[] memory randomWords
+    ) internal override {
+        // 테스트용 변수에 저장
+        latestRandomNum = randomWords[0];
+
+        emit RandomNumberStored(latestRandomNum);
+    }
+
+
+    //check raffle
+    function checkRaffle(string memory _surveyId) public returns(string[] memory){
+
+        for(uint i=0;i<Surveys[_surveyId].check;i++){
+            uint idx = latestRandomNum % Surveys[_surveyId].applicationList.length+i;
+            string memory id = Surveys[_surveyId].applicationList[idx];
+            Applications[id].win = 1;
+            win.push(Applications[id].email);
         }
 
-        function getDaysInMonth(uint8 month, uint16 year) public pure returns (uint8) {
-                if (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-                        return 31;
-                }
-                else if (month == 4 || month == 6 || month == 9 || month == 11) {
-                        return 30;
-                }
-                else if (isLeapYear(year)) {
-                        return 29;
-                }
-                else {
-                        return 28;
-                }
+        return win;
+    }
+
+
+    function checkRandom() public {
+        count = count+1;
+        uint month = dateTime.getMonth(block.timestamp);
+        uint day = dateTime.getDay(block.timestamp);
+
+        for(uint i=0;i<raffleTime.length;i++){
+            if(month == dateTime.getMonth(raffleTime[i]) && day == dateTime.getDay(raffleTime[i])){
+                random();
+            }
         }
-
-        function parseTimestamp(uint timestamp) internal pure returns (_DateTime memory dt) {
-                uint secondsAccountedFor = 0;
-                uint buf;
-                uint8 i;
-
-                // Year
-                dt.year = getYear(timestamp);
-                buf = leapYearsBefore(dt.year) - leapYearsBefore(ORIGIN_YEAR);
-
-                secondsAccountedFor += LEAP_YEAR_IN_SECONDS * buf;
-                secondsAccountedFor += YEAR_IN_SECONDS * (dt.year - ORIGIN_YEAR - buf);
-
-                // Month
-                uint secondsInMonth;
-                for (i = 1; i <= 12; i++) {
-                        secondsInMonth = DAY_IN_SECONDS * getDaysInMonth(i, dt.year);
-                        if (secondsInMonth + secondsAccountedFor > timestamp) {
-                                dt.month = i;
-                                break;
-                        }
-                        secondsAccountedFor += secondsInMonth;
-                }
-
-                // Day
-                for (i = 1; i <= getDaysInMonth(dt.month, dt.year); i++) {
-                        if (DAY_IN_SECONDS + secondsAccountedFor > timestamp) {
-                                dt.day = i;
-                                break;
-                        }
-                        secondsAccountedFor += DAY_IN_SECONDS;
-                }
-
-                // Hour
-                dt.hour = getHour(timestamp);
-
-                // Minute
-                dt.minute = getMinute(timestamp);
-
-                // Second
-                dt.second = getSecond(timestamp);
-
-                // Day of week.
-                dt.weekday = getWeekday(timestamp);
-        }
-
-        function getYear(uint timestamp) public pure returns (uint16) {
-                uint secondsAccountedFor = 0;
-                uint16 year;
-                uint numLeapYears;
-
-                // Year
-                year = uint16(ORIGIN_YEAR + timestamp / YEAR_IN_SECONDS);
-                numLeapYears = leapYearsBefore(year) - leapYearsBefore(ORIGIN_YEAR);
-
-                secondsAccountedFor += LEAP_YEAR_IN_SECONDS * numLeapYears;
-                secondsAccountedFor += YEAR_IN_SECONDS * (year - ORIGIN_YEAR - numLeapYears);
-
-                while (secondsAccountedFor > timestamp) {
-                        if (isLeapYear(uint16(year - 1))) {
-                                secondsAccountedFor -= LEAP_YEAR_IN_SECONDS;
-                        }
-                        else {
-                                secondsAccountedFor -= YEAR_IN_SECONDS;
-                        }
-                        year -= 1;
-                }
-                return year;
-        }
-
-        function getMonth(uint timestamp) public pure returns (uint8) {
-                return parseTimestamp(timestamp).month;
-        }
-
-        function getDay(uint timestamp) public pure returns (uint8) {
-                return parseTimestamp(timestamp).day;
-        }
-
-        function getHour(uint timestamp) public pure returns (uint8) {
-                return uint8((timestamp / 60 / 60) % 24);
-        }
-
-        function getMinute(uint timestamp) public pure returns (uint8) {
-                return uint8((timestamp / 60) % 60);
-        }
-
-        function getSecond(uint timestamp) public pure returns (uint8) {
-                return uint8(timestamp % 60);
-        }
-
-        function getWeekday(uint timestamp) public pure returns (uint8) {
-                return uint8((timestamp / DAY_IN_SECONDS + 4) % 7);
-        }
-
-        function toTimestamp(uint16 year, uint8 month, uint8 day) public pure returns (uint timestamp) {
-                return toTimestamp(year, month, day, 0, 0, 0);
-        }
-
-        function toTimestamp(uint16 year, uint8 month, uint8 day, uint8 hour) public pure returns (uint timestamp) {
-                return toTimestamp(year, month, day, hour, 0, 0);
-        }
-
-        function toTimestamp(uint16 year, uint8 month, uint8 day, uint8 hour, uint8 minute) public pure returns (uint timestamp) {
-                return toTimestamp(year, month, day, hour, minute, 0);
-        }
-
-        function toTimestamp(uint16 year, uint8 month, uint8 day, uint8 hour, uint8 minute, uint8 second) public pure returns (uint timestamp) {
-                uint16 i;
-
-                // Year
-                for (i = ORIGIN_YEAR; i < year; i++) {
-                        if (isLeapYear(i)) {
-                                timestamp += LEAP_YEAR_IN_SECONDS;
-                        }
-                        else {
-                                timestamp += YEAR_IN_SECONDS;
-                        }
-                }
-
-                // Month
-                uint8[12] memory monthDayCounts;
-                monthDayCounts[0] = 31;
-                if (isLeapYear(year)) {
-                        monthDayCounts[1] = 29;
-                }
-                else {
-                        monthDayCounts[1] = 28;
-                }
-                monthDayCounts[2] = 31;
-                monthDayCounts[3] = 30;
-                monthDayCounts[4] = 31;
-                monthDayCounts[5] = 30;
-                monthDayCounts[6] = 31;
-                monthDayCounts[7] = 31;
-                monthDayCounts[8] = 30;
-                monthDayCounts[9] = 31;
-                monthDayCounts[10] = 30;
-                monthDayCounts[11] = 31;
-
-                for (i = 1; i < month; i++) {
-                        timestamp += DAY_IN_SECONDS * monthDayCounts[i - 1];
-                }
-
-                // Day
-                timestamp += DAY_IN_SECONDS * (day - 1);
-
-                // Hour
-                timestamp += HOUR_IN_SECONDS * (hour);
-
-                // Minute
-                timestamp += MINUTE_IN_SECONDS * (minute);
-
-                // Second
-                timestamp += second;
-
-                return timestamp;
-        }
+    }
 }
