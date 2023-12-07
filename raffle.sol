@@ -29,6 +29,7 @@ contract Raffle is VRFConsumerBaseV2 {
     // 랜던값 요청시 발생하는 이벤트
     event RandomNumberStored(uint256 indexed randomNumber);
 
+    string public publicSurveyId;
     //참여자 구조체 -> 참여자:설문조사 = 1:1이라고 생각
     struct application {
         //설문조사 구분 (한명의 참여자는 한개의 서베이만 참여)
@@ -61,16 +62,20 @@ contract Raffle is VRFConsumerBaseV2 {
     //survey 배열
     string[] surveyArray;
     
-    //survey raffletime 배열
-    uint[] raffleTime;
-
+    //survey raffletime 
+    // uint[] raffleTime;
+    struct raffleTime {
+        string[] surveyId;
+        uint randomNum;
+    }
+    
+    mapping (uint => raffleTime) RaffleTimes;
+    uint public timeStamp;
 
     //automate test
     uint public count;
 
-    //당첨자 
-    string [] win;
-
+    
 
         // 생성자에 돈빠져나갈 아이디 입력해줘야함 현재 4236
     constructor(uint64 subscriptionId) VRFConsumerBaseV2(vrfCoordinator) {
@@ -84,10 +89,12 @@ contract Raffle is VRFConsumerBaseV2 {
 
 
         if(keccak256(abi.encodePacked(Surveys[_surveyId].surveyId)) == keccak256(abi.encodePacked(""))){
-            raffleTime.push(_raffleTime);  
+            // raffleTime.push(_raffleTime);  
+            RaffleTimes[_raffleTime].surveyId.push(_surveyId);
             surveyArray.push(_surveyId);
         }
         string[] memory init = new string[](0);
+        // uint[] memory initNum = new uint[](0);
         Surveys[_surveyId] = survey(_surveyId,_raffleTime,check,init);
         
     }
@@ -95,10 +102,11 @@ contract Raffle is VRFConsumerBaseV2 {
     //설문 가져오기 
     function getSurvey(string memory _surveyId) public view returns (string memory, uint,uint,string[] memory){
         string memory surveyId = Surveys[_surveyId].surveyId;
-        uint timeStamp = Surveys[_surveyId].raffleTime;
+        uint time = Surveys[_surveyId].raffleTime;
         uint check = Surveys[_surveyId].check;
         string[] memory applicationList = Surveys[_surveyId].applicationList;
-        return (surveyId,timeStamp,check,applicationList);
+        // uint[] memory randomNum = Surveys[_surveyId].randomNum;
+        return (surveyId,time,check,applicationList);
     }
 
     //전체 설문 가져오기
@@ -112,7 +120,7 @@ contract Raffle is VRFConsumerBaseV2 {
         for(uint i =0;i<surveyArray.length;i++){
             delete Surveys[surveyArray[i]];
         }
-        delete raffleTime;
+        // delete raffleTime;
         delete surveyArray;
     }
 
@@ -184,23 +192,34 @@ contract Raffle is VRFConsumerBaseV2 {
     ) internal override {
         // 테스트용 변수에 저장
         latestRandomNum = randomWords[0];
-
+        RaffleTimes[timeStamp].randomNum = latestRandomNum;
         emit RandomNumberStored(latestRandomNum);
+    }
+
+    function choice() public  {
+        uint seed = uint(keccak256(abi.encodePacked(block.timestamp, block.difficulty, block.number)));
+        RaffleTimes[timeStamp].randomNum = seed;
     }
 
 
     //check raffle
-    function checkRaffle(string memory _surveyId) public returns(string[] memory){
+    function checkRaffle(string memory _surveyId) public returns(string memory){
 
-        for(uint i=0;i<Surveys[_surveyId].check;i++){
-            uint idx = latestRandomNum % Surveys[_surveyId].applicationList.length+i;
-            string memory id = Surveys[_surveyId].applicationList[idx];
-            Applications[id].win = 1;
-            win.push(Applications[id].email);
-        }
-
+        uint num = RaffleTimes[Surveys[_surveyId].raffleTime].randomNum;
+        uint idx = num % Surveys[_surveyId].applicationList.length;
+        string memory id = Surveys[_surveyId].applicationList[idx];
+        Applications[id].win = 1;
+        string memory win = Applications[id].email;
         return win;
     }
+
+    // function getRandomNum(string memory _surveyId) public view returns(uint){
+    //     return RaffleTimes[Surveys[_surveyId].raffleTime].randomNum;
+    // }
+
+    // function getRaffleTime(uint _raffleTime) public view returns(uint){
+    //     return RaffleTimes[_raffleTime].randomNum;
+    // }
 
 
     //automation 
@@ -209,9 +228,13 @@ contract Raffle is VRFConsumerBaseV2 {
         uint month = dateTime.getMonth(block.timestamp);
         uint day = dateTime.getDay(block.timestamp);
 
-        for(uint i=0;i<raffleTime.length;i++){
-            if(month == dateTime.getMonth(raffleTime[i]) && day == dateTime.getDay(raffleTime[i])){
+        for(uint i=0;i<surveyArray.length;i++){
+            if(month == dateTime.getMonth(Surveys[surveyArray[i]].raffleTime) && day == dateTime.getDay(Surveys[surveyArray[i]].raffleTime)){
+                timeStamp = Surveys[surveyArray[i]].raffleTime;
+            
                 random();
+                // choice();
+                
             }
         }
     }
