@@ -200,3 +200,13 @@ contract Raffle is VRFConsumerBaseV2 {
 
         return win;
     }
+
+
+    function checkRandom() public {
+        for(uint i=0;i<raffleTime.length;i++){
+            if(block.timestamp == raffleTime[i]){
+                random();
+            }
+        }
+    }
+}
