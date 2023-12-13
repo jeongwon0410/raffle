@@ -29,7 +29,7 @@ contract Raffle is VRFConsumerBaseV2 {
     // 랜던값 요청시 발생하는 이벤트
     event RandomNumberStored(uint256 indexed randomNumber);
 
-    string public publicSurveyId;
+    
     //참여자 구조체 -> 참여자:설문조사 = 1:1이라고 생각
     struct application {
         //설문조사 구분 (한명의 참여자는 한개의 서베이만 참여)
@@ -196,30 +196,32 @@ contract Raffle is VRFConsumerBaseV2 {
         emit RandomNumberStored(latestRandomNum);
     }
 
-    function choice() public  {
-        uint seed = uint(keccak256(abi.encodePacked(block.timestamp, block.difficulty, block.number)));
-        RaffleTimes[timeStamp].randomNum = seed;
-    }
-
-
     //check raffle
-    function checkRaffle(string memory _surveyId) public returns(string memory){
+    function checkRaffle(string memory _surveyId) public returns(string [] memory){
 
-        uint num = RaffleTimes[Surveys[_surveyId].raffleTime].randomNum;
-        uint idx = num % Surveys[_surveyId].applicationList.length;
-        string memory id = Surveys[_surveyId].applicationList[idx];
-        Applications[id].win = 1;
-        string memory win = Applications[id].email;
-        return win;
+        uint num = RaffleTimes[Surveys[_surveyId].raffleTime].randomNum; 
+        string[] memory pickedList = new string[](Surveys[_surveyId].check);
+        for(uint i =0;i<Surveys[_surveyId].check;i++){
+            uint idx = num % 10 % Surveys[_surveyId].applicationList.length;
+            num = num / 10;
+            string memory id = Surveys[_surveyId].applicationList[idx];
+            Applications[id].win = 1;
+            pickedList[i] = Applications[id].email;
+            
+        }
+        return pickedList;
+
+
     }
 
-    // function getRandomNum(string memory _surveyId) public view returns(uint){
-    //     return RaffleTimes[Surveys[_surveyId].raffleTime].randomNum;
-    // }
 
-    // function getRaffleTime(uint _raffleTime) public view returns(uint){
-    //     return RaffleTimes[_raffleTime].randomNum;
-    // }
+    function getRandomNum(string memory _surveyId) public view returns(uint){
+        return RaffleTimes[Surveys[_surveyId].raffleTime].randomNum;
+    }
+
+    function getRaffleTime(uint _raffleTime) public view returns(uint){
+        return RaffleTimes[_raffleTime].randomNum;
+    }
 
 
     //automation 
