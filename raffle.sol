@@ -50,6 +50,7 @@ contract Raffle is VRFConsumerBaseV2 {
         uint raffleTime;
         uint check;
         string[] applicationList;
+        string[] winList;
     }
 
     mapping(string => application) Applications;
@@ -94,19 +95,19 @@ contract Raffle is VRFConsumerBaseV2 {
             surveyArray.push(_surveyId);
         }
         string[] memory init = new string[](0);
-        // uint[] memory initNum = new uint[](0);
-        Surveys[_surveyId] = survey(_surveyId,_raffleTime,check,init);
+        string[] memory initNum = new string[](0);
+        Surveys[_surveyId] = survey(_surveyId,_raffleTime,check,init,initNum);
         
     }
 
     //설문 가져오기 
-    function getSurvey(string memory _surveyId) public view returns (string memory, uint,uint,string[] memory){
+    function getSurvey(string memory _surveyId) public view returns (string memory, uint,uint,string[] memory,string[] memory){
         string memory surveyId = Surveys[_surveyId].surveyId;
         uint time = Surveys[_surveyId].raffleTime;
         uint check = Surveys[_surveyId].check;
         string[] memory applicationList = Surveys[_surveyId].applicationList;
-        // uint[] memory randomNum = Surveys[_surveyId].randomNum;
-        return (surveyId,time,check,applicationList);
+        string[] memory winList = Surveys[_surveyId].winList;
+        return (surveyId,time,check,applicationList,winList);
     }
 
     //전체 설문 가져오기
@@ -134,6 +135,7 @@ contract Raffle is VRFConsumerBaseV2 {
             if(keccak256(abi.encodePacked(surveyArray[i])) == keccak256(abi.encodePacked(_surveyId))){
                 if(keccak256(abi.encodePacked(Applications[_email].email)) == keccak256(abi.encodePacked(""))){
                     Surveys[_surveyId].applicationList.push(_email);
+                    // Surveys[_surveyId].winList.push(0);
                     applicationArray.push(_email);
                 }
                 Applications[_email] = application(_surveyId,_email,0);
@@ -196,22 +198,30 @@ contract Raffle is VRFConsumerBaseV2 {
         emit RandomNumberStored(latestRandomNum);
     }
 
-    //check raffle
-    function checkRaffle(string memory _surveyId) public returns(string [] memory){
 
+    //check raffle
+    function checkRaffle(string memory _surveyId) public {
+        // uint num = 1222;
         uint num = RaffleTimes[Surveys[_surveyId].raffleTime].randomNum; 
-        string[] memory pickedList = new string[](Surveys[_surveyId].check);
-        for(uint i =0;i<Surveys[_surveyId].check;i++){
+        uint index = 0;
+        uint i = 0;
+        while(index < Surveys[_surveyId].check+i){
             uint idx = num % 10 % Surveys[_surveyId].applicationList.length;
             num = num / 10;
             string memory id = Surveys[_surveyId].applicationList[idx];
-            Applications[id].win = 1;
-            pickedList[i] = Applications[id].email;
-            
+
+            if(Applications[id].win == 1){
+                i = i+1;
+            }else{
+                Surveys[_surveyId].winList.push(Surveys[_surveyId].applicationList[idx]);
+                Applications[id].win = 1;
+                
+            }
+
+            index = index+1;
+                    
         }
-        return pickedList;
-
-
+    
     }
 
 
