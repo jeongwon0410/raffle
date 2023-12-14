@@ -25,7 +25,7 @@ contract Raffle is VRFConsumerBaseV2 {
     uint32 numWords = 1;
 
     // 랜덤값 잘 얻어졌는지 테스트용 변수
-    uint256 public latestRandomNum = 1000;
+    uint256 public latestRandomNum = 123456789;
     // 랜던값 요청시 발생하는 이벤트
     event RandomNumberStored(uint256 indexed randomNumber);
 
@@ -202,7 +202,10 @@ contract Raffle is VRFConsumerBaseV2 {
     //check raffle
     function checkRaffle(string memory _surveyId) public {
         // uint num = 1222;
-        uint num = RaffleTimes[Surveys[_surveyId].raffleTime].randomNum; 
+        uint num = RaffleTimes[Surveys[_surveyId].raffleTime].randomNum;
+        if(num == 0){
+            num = latestRandomNum;
+        } 
         uint index = 0;
         uint i = 0;
         while(index < Surveys[_surveyId].check+i){
